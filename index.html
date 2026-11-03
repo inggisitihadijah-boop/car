@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Car Avoidance Challenge 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16294d; --sky:#2a8cff; --orange:#ff7a00; --orange-d:#c85a00; --sun:#ffd23f;
+  --paper:#fffaf0; --mint:#19c37d; --red:#ff3b4e;
+  --font:'Fredoka','Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#8fd4ff;font-family:var(--font);color:var(--ink);-webkit-user-select:none;user-select:none}
+#app{position:fixed;inset:0}
+#app.shake{animation:shake .5s}
+@keyframes shake{0%,100%{transform:translate(0,0)}15%{transform:translate(-14px,6px)}30%{transform:translate(12px,-8px)}45%{transform:translate(-9px,-5px)}60%{transform:translate(8px,7px)}80%{transform:translate(-4px,2px)}}
+canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block}
+#flash{position:absolute;inset:0;background:radial-gradient(circle,rgba(255,40,60,.15) 30%,rgba(255,20,40,.75) 100%);opacity:0;pointer-events:none}
+#flash.on{animation:flash .55s ease-out}
+@keyframes flash{0%{opacity:1}100%{opacity:0}}
+
+/* HUD */
+#hud{position:absolute;inset:0;pointer-events:none;display:none;padding:max(14px,env(safe-area-inset-top)) 16px 16px}
+#hud.show{display:block}
+.pill{background:rgba(255,250,240,.92);border:3px solid var(--ink);border-radius:18px;box-shadow:0 4px 0 var(--ink);padding:6px 14px}
+#hearts{display:flex;gap:4px;font-size:30px;line-height:1;width:max-content;padding:6px 12px}
+#hearts span{display:inline-block;transition:transform .2s,filter .3s,opacity .3s}
+#hearts span.lost{filter:grayscale(1);opacity:.28;transform:scale(.8)}
+#hearts span.pop{animation:pop .5s}
+@keyframes pop{0%{transform:scale(1)}30%{transform:scale(1.7) rotate(-12deg)}100%{transform:scale(.8)}}
+#stats{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
+.stat{min-width:92px;text-align:center;padding:4px 12px}
+.stat small{display:block;font-size:12px;font-weight:600;opacity:.65;margin-bottom:-2px}
+.stat b{font-size:24px;font-weight:700}
+#topRight{position:absolute;right:16px;top:max(14px,env(safe-area-inset-top));display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.iconrow{display:flex;gap:8px;pointer-events:auto}
+.ibtn{width:48px;height:48px;font-size:22px;border-radius:16px;border:3px solid var(--ink);background:var(--paper);box-shadow:0 4px 0 var(--ink);cursor:pointer;font-family:inherit}
+.ibtn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+#chip{font-size:15px;font-weight:600;padding:4px 12px}
+#speedBox{position:absolute;right:16px;bottom:18px;text-align:center;padding:8px 18px}
+#speedBox b{font-size:40px;font-weight:700;display:block;line-height:1}
+#speedBox small{font-weight:600;opacity:.65}
+#bestBox{position:absolute;left:16px;bottom:18px;padding:6px 14px;font-size:14px;font-weight:600;line-height:1.35}
+#popup{position:absolute;left:50%;top:26%;transform:translateX(-50%);font-size:34px;font-weight:700;color:var(--sun);-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;text-shadow:0 4px 0 var(--ink);opacity:0;white-space:nowrap}
+#popup.on{animation:popup 1s ease-out}
+@keyframes popup{0%{opacity:0;transform:translate(-50%,20px) scale(.6)}15%{opacity:1;transform:translate(-50%,0) scale(1.15)}70%{opacity:1;transform:translate(-50%,-10px) scale(1)}100%{opacity:0;transform:translate(-50%,-40px) scale(1)}}
+#count{position:absolute;inset:0;display:none;align-items:center;justify-content:center;font-size:min(34vw,260px);font-weight:700;color:#fff;-webkit-text-stroke:6px var(--ink);paint-order:stroke fill;text-shadow:0 10px 0 var(--ink);pointer-events:none}
+#count.on{display:flex}
+#count span{display:block;animation:cnt .9s ease-out}
+@keyframes cnt{0%{transform:scale(2.2);opacity:0}25%{transform:scale(1);opacity:1}100%{transform:scale(.85);opacity:.9}}
+#toast{position:absolute;left:50%;bottom:92px;transform:translate(-50%,30px);background:var(--ink);color:#fff;padding:12px 20px;border-radius:16px;font-weight:600;opacity:0;transition:.3s;pointer-events:none;max-width:90vw;text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* Overlay & cards */
+.overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:14px;overflow:auto;background:rgba(22,41,77,.38);backdrop-filter:blur(3px)}
+.overlay.show{display:flex}
+.card{background:var(--paper);border:4px solid var(--ink);border-radius:28px;box-shadow:0 8px 0 var(--ink);padding:22px 26px;width:min(860px,100%);max-height:100%;overflow:auto;margin:auto}
+.card.small{width:min(420px,100%);text-align:center}
+h1{margin:0;font-size:clamp(30px,5.5vw,52px);line-height:1;font-weight:700;letter-spacing:-.5px}
+h1 em{font-style:normal;color:var(--orange);-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;text-shadow:0 3px 0 var(--ink)}
+h2{font-size:18px;margin:0 0 10px;font-weight:700}
+.sub{margin:8px 0 16px;font-size:17px;opacity:.8}
+.grid{display:grid;grid-template-columns:1.25fr 1fr;gap:14px}
+@media(max-width:720px){.grid{grid-template-columns:1fr}}
+.panel{border:3px solid var(--ink);border-radius:20px;padding:14px 16px;background:#fff}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0}
+.row label{display:flex;align-items:center;gap:6px;font-weight:500;font-size:15px}
+.btn{font-family:inherit;font-weight:700;font-size:16px;color:#fff;background:var(--sky);border:3px solid var(--ink);border-radius:16px;padding:8px 16px;box-shadow:0 4px 0 var(--ink);cursor:pointer}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
+.btn.alt{background:var(--paper);color:var(--ink)}
+.btn.go{background:var(--orange)}
+.btn.big{font-size:26px;padding:14px 30px;width:100%;margin-top:16px;background:var(--orange);border-radius:22px;box-shadow:0 6px 0 var(--ink)}
+.btn.big:active{transform:translateY(4px);box-shadow:0 2px 0 var(--ink)}
+.status{font-weight:600;font-size:14px;padding:3px 10px;border-radius:999px;border:2px solid var(--ink);background:#e7ecf5}
+.status.ok{background:#b9f3d8}.status.warn{background:#ffe9a8}.status.bad{background:#ffc4c9}
+.meter{display:grid;grid-template-columns:70px 1fr 48px;align-items:center;gap:8px;margin:8px 0;font-size:14px;font-weight:600}
+.track{position:relative;height:16px;border-radius:999px;background:#e7ecf5;border:2px solid var(--ink)}
+.track .mid{position:absolute;left:50%;top:-3px;bottom:-3px;width:2px;background:var(--ink);opacity:.5}
+.track b{position:absolute;top:50%;left:50%;width:22px;height:22px;border-radius:50%;background:var(--orange);border:3px solid var(--ink);transform:translate(-50%,-50%)}
+.meter em{font-style:normal;text-align:right;font-variant-numeric:tabular-nums}
+.hint{font-size:13px;opacity:.72;margin:8px 0 0;line-height:1.35}
+#raw{font-size:13px;opacity:.75;font-variant-numeric:tabular-nums}
+input[type=range]{accent-color:var(--orange);width:130px}
+kbd{display:inline-block;min-width:28px;text-align:center;padding:1px 7px;border:2px solid var(--ink);border-bottom-width:4px;border-radius:8px;background:#fff;font-family:inherit;font-weight:600;font-size:14px}
+.keys p{margin:6px 0;font-size:15px}
+.rec{margin-top:12px;font-size:16px;font-weight:600;line-height:1.6}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:14px 0;text-align:left}
+.res div{background:#fff;border:3px solid var(--ink);border-radius:14px;padding:6px 12px;font-size:13px;font-weight:600}
+.res b{display:block;font-size:24px}
+.badge{display:inline-block;margin:2px 3px;padding:3px 12px;border-radius:999px;background:var(--sun);border:3px solid var(--ink);font-weight:700;font-size:14px}
+.stack{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+.stack .btn{width:100%}
+.wcard{width:min(560px,100%)}
+.wcard h1{font-size:clamp(32px,7vw,54px);margin:4px 0 0}
+.wtop{margin:0;font-size:20px;font-weight:600;opacity:.75}
+.wemoji{display:flex;justify-content:center;gap:14px;font-size:44px}
+.wemoji span{display:inline-block;animation:bounce 1.2s ease-in-out infinite}
+.wemoji span:nth-child(2){animation-delay:.2s}.wemoji span:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-14px) rotate(-8deg)}}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:4px}
+.avlabel{font-weight:600;font-size:15px;margin:12px 0 0}
+.avpick{display:flex;justify-content:center;gap:10px;margin:10px 0 8px}
+.avopt{width:64px;height:64px;padding:2px;border-radius:18px;border:3px solid var(--ink);background:#fff;box-shadow:0 4px 0 var(--ink);cursor:pointer;transition:transform .15s}
+.avopt svg{width:100%;height:100%;display:block}
+.avopt.sel{background:var(--sun);transform:translateY(-4px) scale(1.08)}
+#nameIn{font-family:inherit;font-size:22px;font-weight:600;text-align:center;width:100%;padding:10px 14px;border:3px solid var(--ink);border-radius:16px;color:var(--ink);background:#fff;-webkit-user-select:text;user-select:text}
+#nameIn:focus{outline:4px solid var(--sun)}
+#nameIn.err{animation:shake .4s;border-color:var(--red)}
+.btn.small{font-size:14px;padding:5px 14px}
+.mouth{transform-box:fill-box;transform-origin:center}
+.talk .mouth{animation:talk .2s ease-in-out infinite alternate}
+@keyframes talk{from{transform:scaleY(.35)}to{transform:scaleY(1.7)}}
+#greet{background:rgba(22,41,77,.55)}
+.gwrap{display:flex;flex-direction:column;align-items:center;gap:22px;width:min(560px,100%);margin:auto}
+#greetAv{width:min(46vw,210px);aspect-ratio:1;animation:floaty 2s ease-in-out infinite;filter:drop-shadow(0 8px 0 rgba(22,41,77,.35))}
+#greetAv svg{width:100%;height:100%;display:block}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.bubble{position:relative;background:var(--paper);border:4px solid var(--ink);border-radius:26px;box-shadow:0 6px 0 var(--ink);padding:18px 24px;font-size:clamp(20px,4.2vw,30px);font-weight:600;text-align:center;min-height:96px;display:flex;align-items:center;justify-content:center;width:100%}
+.bubble::before{content:'';position:absolute;top:-18px;left:50%;margin-left:-14px;border:14px solid transparent;border-top:0;border-bottom-color:var(--ink)}
+#who{display:flex;align-items:center;gap:8px;padding:4px 12px;font-size:16px}
+.mini{width:30px;height:30px;display:inline-block}
+.mini svg{width:100%;height:100%;display:block}
+.whoRow{display:flex;align-items:center;gap:10px;margin:8px 0 0;font-weight:600}
+.whoRow .mini{width:38px;height:38px}
+@media(prefers-reduced-motion:reduce){#greetAv,.talk .mouth{animation:none}}
+@media(prefers-reduced-motion:reduce){.wemoji span{animation:none}}
+@media(max-width:560px){.stat{min-width:70px}.stat b{font-size:19px}#hearts{font-size:24px}}
+@media(prefers-reduced-motion:reduce){#app.shake{animation:none}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+  <div id="flash"></div>
+
+  <div id="hud">
+    <div id="hearts" class="pill"></div>
+    <div id="stats">
+      <div class="pill stat"><small>Skor</small><b id="hScore">0</b></div>
+      <div class="pill stat"><small>Jarak</small><b id="hDist">0 m</b></div>
+      <div class="pill stat"><small>Waktu</small><b id="hTime">00:00</b></div>
+    </div>
+    <div id="topRight">
+      <div class="iconrow">
+        <button class="ibtn" id="btnPause" title="Jeda (P)">⏸</button>
+        <button class="ibtn" id="btnRestart" title="Ulang (R)">🔄</button>
+        <button class="ibtn" id="btnMute" title="Suara (M)">🔊</button>
+      </div>
+      <div class="pill" id="who"></div>
+      <div class="pill" id="chip">⌨️ Keyboard</div>
+    </div>
+    <div class="pill" id="speedBox"><b id="hSpeed">0</b><small>km/jam</small></div>
+    <div class="pill" id="bestBox"></div>
+    <div id="popup"></div>
+  </div>
+
+  <div id="count"><span id="countTxt">3</span></div>
+  <div id="toast"></div>
+
+  <!-- Sambutan -->
+  <div id="welcome" class="overlay show">
+    <div class="card small wcard">
+      <div class="wemoji"><span>🚗</span><span>⭐</span><span>🏁</span></div>
+      <p class="wtop">Selamat datang,</p>
+      <h1>Anak-Anak <em>Keren</em><br>MIN 1 Cilegon!</h1>
+      <p class="sub">Siap jadi pembalap hebat? Kendalikan mobil dengan micro:bit, hindari tabrakan, dan kumpulkan koin sebanyak-banyaknya. Fokus, sabar, dan tetap semangat. Pembalap keren selalu berhati-hati!</p>
+      <div class="chips"><span class="badge">🧠 Berani mencoba</span><span class="badge">🤝 Saling menyemangati</span><span class="badge">🏆 Pantang menyerah</span></div>
+      <p class="avlabel">Pilih avatarmu:</p>
+      <div class="avpick" id="avPick"></div>
+      <input id="nameIn" type="text" maxlength="16" placeholder="Tulis namamu di sini" autocomplete="off" aria-label="Nama pemain">
+      <button class="btn big" id="btnWelcome">🏁 Ayo, Kita Mulai!</button>
+    </div>
+  </div>
+
+  <!-- Sapaan avatar -->
+  <div id="greet" class="overlay">
+    <div class="gwrap">
+      <div id="greetAv"></div>
+      <div class="bubble"><span id="bubbleTxt"></span></div>
+      <button class="btn alt small" id="skipGreet">Lewati ▶</button>
+    </div>
+  </div>
+
+  <!-- Menu & kalibrasi -->
+  <div id="menu" class="overlay">
+    <div class="card">
+      <h1>Car Avoidance <em>Challenge</em></h1>
+      <div class="whoRow" id="menuWho"></div>
+      <p class="sub">Hindari mobil dari arah berlawanan, ambil koin, dan bertahan sejauh mungkin dengan 5 nyawa.</p>
+      <div class="grid">
+        <section class="panel">
+          <h2>🎮 Tes & kalibrasi micro:bit V2</h2>
+          <div class="row">
+            <button class="btn" id="btnConnect">🔌 Sambungkan</button>
+            <span class="status" id="mbStatus">Belum tersambung</span>
+          </div>
+          <div class="meter"><span>Belok</span><div class="track"><i class="mid"></i><b id="kSteer"></b></div><em id="vSteer">0%</em></div>
+          <div class="meter"><span>Rem / Gas</span><div class="track"><i class="mid"></i><b id="kThr"></b></div><em id="vThr">0%</em></div>
+          <div id="raw">Sumber: keyboard</div>
+          <div class="row">
+            <label>Sensitivitas <input type="range" id="sens" min="0.5" max="3" step="0.1"> <span id="sensV">1.0×</span></label>
+          </div>
+          <div class="row">
+            <label><input type="checkbox" id="invX"> Balik kiri/kanan</label>
+            <label><input type="checkbox" id="invY"> Balik gas/rem</label>
+          </div>
+          <div class="row">
+            <button class="btn go" id="btnCal">🎯 Kalibrasi</button>
+            <button class="btn alt" id="btnCalReset">↺ Reset</button>
+          </div>
+          <p class="hint">Letakkan micro:bit datar di posisi nyaman, lalu tekan Kalibrasi. Miring kanan/kiri untuk belok; turunkan ujung atas untuk gas, angkat untuk rem. Jika arahnya terbalik, centang opsi balik.</p>
+        </section>
+        <section class="panel">
+          <h2>⌨️ Keyboard</h2>
+          <div class="keys">
+            <p><kbd>←</kbd> <kbd>→</kbd> belok kiri / kanan</p>
+            <p><kbd>↑</kbd> gas &nbsp; <kbd>↓</kbd> rem</p>
+            <p><kbd>P</kbd> jeda &nbsp; <kbd>R</kbd> ulang &nbsp; <kbd>M</kbd> suara</p>
+          </div>
+          <p class="hint">Mobil di layar ini sudah bisa digerakkan untuk uji coba kontrol.</p>
+          <h2 style="margin-top:14px">🏆 Rekor</h2>
+          <div class="rec" id="menuRec"></div>
+        </section>
+      </div>
+      <button class="btn big" id="btnStart">🚀 Mulai Balapan</button>
+    </div>
+  </div>
+
+  <!-- Jeda -->
+  <div id="pauseOv" class="overlay">
+    <div class="card small">
+      <h1 style="font-size:42px">Jeda</h1>
+      <div class="stack">
+        <button class="btn go" id="pResume">▶ Lanjut</button>
+        <button class="btn" id="pRestart">🔄 Ulang dari awal</button>
+        <button class="btn alt" id="pMenu">🏠 Menu & kalibrasi</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div id="overOv" class="overlay">
+    <div class="card small">
+      <h1 style="font-size:44px">Game <em>Over</em></h1>
+      <p class="sub" id="oWho" style="margin:6px 0"></p>
+      <div id="newRec"></div>
+      <div class="res">
+        <div>Skor<b id="oScore">0</b></div>
+        <div>Jarak<b id="oDist">0 m</b></div>
+        <div>Waktu<b id="oTime">00:00</b></div>
+        <div>Koin<b id="oCoins">0</b></div>
+      </div>
+      <div class="stack">
+        <button class="btn go" id="oRestart">🔄 Main lagi</button>
+        <button class="btn alt" id="oMenu">🏠 Menu & kalibrasi</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const lerp = (a,b,t) => a + (b-a)*t;
+const rnd = (a,b) => a + Math.random()*(b-a);
+const rndInt = (a,b) => Math.floor(rnd(a,b+1));
+const pick = arr => arr[(Math.random()*arr.length)|0];
+const damp = (cur,target,rate,dt) => cur + (target-cur)*(1-Math.exp(-rate*dt));
+
+if (typeof THREE === 'undefined') {
+  document.body.insertAdjacentHTML('beforeend','<p style="position:fixed;inset:0;display:grid;place-items:center;font:600 20px sans-serif;text-align:center;padding:20px">Three.js gagal dimuat. Periksa koneksi internet lalu muat ulang halaman.</p>');
+  return;
+}
+
+/* ================= Pengaturan & rekor ================= */
+const SKEY = 'carAvoid3D_settings', RKEY = 'carAvoid3D_records';
+const settings = {sens:1, invX:false, invY:false, offX:0, offY:0, muted:false, name:'', avatar:0};
+const records = {time:0, dist:0, score:0};
+try { Object.assign(settings, JSON.parse(localStorage.getItem(SKEY) || '{}')); } catch(e){}
+try { Object.assign(records, JSON.parse(localStorage.getItem(RKEY) || '{}')); } catch(e){}
+const saveSettings = () => { try { localStorage.setItem(SKEY, JSON.stringify(settings)); } catch(e){} };
+const saveRecords = () => { try { localStorage.setItem(RKEY, JSON.stringify(records)); } catch(e){} };
+const fmtTime = s => { s = Math.floor(s); return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); };
+const fmtNum = n => Math.floor(n).toLocaleString('id-ID');
+
+/* ================= Three.js dasar ================= */
+const LANES = [-4, 0, 4], ROAD_W = 12, SEG = 80, NSEG = 7, XMAX = 5.1;
+const FOG = 0xcfeeff;
+const canvas = $('gl');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog(FOG, 90, 340);
+const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 700);
+camera.position.set(0, 4.6, 10.5);
+function resize(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize); resize();
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8fd070, 0.95));
+const sunLight = new THREE.DirectionalLight(0xfff0c8, 0.85);
+sunLight.position.set(-30, 60, 20); scene.add(sunLight);
+
+/* Langit: kubah gradasi + matahari */
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(600, 24, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide, depthWrite: false, fog: false,
+    uniforms: {top:{value:new THREE.Color(0x1f86ff)}, mid:{value:new THREE.Color(0x86d0ff)}, bot:{value:new THREE.Color(FOG)}},
+    vertexShader: 'varying float h; void main(){ h = normalize(position).y; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+    fragmentShader: 'uniform vec3 top; uniform vec3 mid; uniform vec3 bot; varying float h; void main(){ vec3 c = h>0.0 ? mix(bot, mix(mid, top, smoothstep(0.15,0.85,h)), smoothstep(0.0,0.22,h)) : bot; gl_FragColor = vec4(c,1.0); }'
+  })
+);
+sky.frustumCulled = false; sky.renderOrder = -2;
+const sunDisc = new THREE.Mesh(new THREE.SphereGeometry(26, 20, 14), new THREE.MeshBasicMaterial({color:0xfff3a0, fog:false}));
+sunDisc.position.set(-230, 190, -420);
+sky.add(sunDisc);
+scene.add(sky);
+
+/* Awan bergerak */
+const clouds = [];
+const cloudMat = new THREE.MeshBasicMaterial({color:0xffffff, fog:false, transparent:true, opacity:.96});
+const cloudGeo = new THREE.SphereGeometry(1, 10, 8);
+for (let i = 0; i < 16; i++) {
+  const c = new THREE.Group();
+  const n = rndInt(4, 6);
+  for (let k = 0; k < n; k++) {
+    const b = new THREE.Mesh(cloudGeo, cloudMat);
+    const s = rnd(7, 13);
+    b.scale.set(s*1.5, s*.7, s);
+    b.position.set((k - n/2)*9 + rnd(-3,3), rnd(-2,3), rnd(-4,4));
+    c.add(b);
+  }
+  c.position.set(rnd(-260,260), rnd(55,95), rnd(-440,-60));
+  c.userData.v = rnd(2, 6) * (Math.random() < .5 ? 1 : -1);
+  scene.add(c); clouds.push(c);
+}
+
+/* ================= Geometri & material bersama ================= */
+const L = (color, extra) => new THREE.MeshLambertMaterial(Object.assign({color}, extra || {}));
+const B = color => new THREE.MeshBasicMaterial({color});
+const GEO = {
+  ground: new THREE.PlaneGeometry(520, SEG).rotateX(-Math.PI/2),
+  road: new THREE.PlaneGeometry(ROAD_W, SEG).rotateX(-Math.PI/2),
+  shoulder: new THREE.PlaneGeometry(1.6, SEG).rotateX(-Math.PI/2),
+  edge: new THREE.PlaneGeometry(0.28, SEG).rotateX(-Math.PI/2),
+  dash: new THREE.PlaneGeometry(0.24, 3.6).rotateX(-Math.PI/2),
+  post: new THREE.BoxGeometry(0.22, 1.0, 0.22),
+  trunk: new THREE.CylinderGeometry(0.22, 0.32, 1.5, 6),
+  cone1: new THREE.ConeGeometry(1.7, 2.8, 7),
+  cone2: new THREE.ConeGeometry(1.3, 2.3, 7),
+  ball: new THREE.SphereGeometry(1.5, 8, 6),
+  circle: new THREE.CircleGeometry(1, 32).rotateX(-Math.PI/2),
+  mtn: new THREE.ConeGeometry(1, 1, 6, 1)
+};
+const MAT = {
+  grass: L(0x62d65a), road: L(0x4b5060), shoulder: L(0xd8c89b), line: B(0xffffff), post: L(0xffffff),
+  trunk: L(0x8b5a2b), leaf: [L(0x2fb44a), L(0x45cc5e), L(0x23a37c), L(0x7bd83a)],
+  mtn: [0x6f9be8, 0x8f7de0, 0x59b48a].map(c => new THREE.MeshPhongMaterial({color:c, flatShading:true, shininess:4, specular:0x111111})),
+  snow: new THREE.MeshPhongMaterial({color:0xffffff, flatShading:true, shininess:6, specular:0x222222}),
+  lake: L(0x38b6ff, {emissive:0x0b4a7a}), sand: L(0xf2e2a6)
+};
+const mesh = (g, m, x=0, y=0, z=0) => { const o = new THREE.Mesh(g, m); o.position.set(x, y, z); return o; };
+
+/* ================= Segmen jalan & pemandangan ================= */
+function makeTree(){
+  const g = new THREE.Group();
+  const leaf = pick(MAT.leaf);
+  g.add(mesh(GEO.trunk, MAT.trunk, 0, .75, 0));
+  if (Math.random() < .3) g.add(mesh(GEO.ball, leaf, 0, 2.7, 0));
+  else { g.add(mesh(GEO.cone1, leaf, 0, 2.6, 0)); g.add(mesh(GEO.cone2, leaf, 0, 3.9, 0)); }
+  const s = rnd(.8, 1.7); g.scale.set(s, s*rnd(.9,1.3), s);
+  return g;
+}
+function fillScenery(seg){
+  if (seg.userData.scn) seg.remove(seg.userData.scn);
+  const g = new THREE.Group(); seg.userData.scn = g; seg.add(g);
+  const lakeSide = Math.random() < .55 ? (Math.random() < .5 ? -1 : 1) : 0;
+  let LW = 0, LL = 0, LZ = 0;
+  if (lakeSide) {
+    LW = rnd(22, 42); LL = rnd(34, 62); LZ = rnd(-(SEG-LL)/2, (SEG-LL)/2);
+    const cx = lakeSide * (13 + LW/2);
+    const sand = mesh(GEO.circle, MAT.sand, cx, .03, LZ); sand.scale.set(LW/2 + 1.5, 1, LL/2 + 1.5);
+    const lake = mesh(GEO.circle, MAT.lake, cx, .07, LZ); lake.scale.set(LW/2, 1, LL/2);
+    g.add(sand, lake);
+  }
+  for (const s of [-1, 1]) {
+    const n = rndInt(5, 9);
+    for (let i = 0; i < n; i++) {
+      const ax = rnd(8, 38), z = rnd(-SEG/2, SEG/2);
+      if (lakeSide === s && ax > 11 && ax < 13 + LW + 2 && Math.abs(z - LZ) < LL/2 + 3) continue;
+      const t = makeTree(); t.position.set(s*ax, 0, z); g.add(t);
+    }
+    const m = rndInt(2, 3);
+    for (let i = 0; i < m; i++) {
+      const r = rnd(18, 38), h = rnd(28, 64), x = s * rnd(52, 170), z = rnd(-45, 45);
+      const mm = new THREE.Mesh(GEO.mtn, pick(MAT.mtn));
+      mm.scale.set(r, h, r); mm.position.set(x, h/2 - .5, z); mm.rotation.y = rnd(0, 6.28);
+      const capH = h*.34;
+      const cap = new THREE.Mesh(GEO.mtn, MAT.snow);
+      cap.scale.set(r*.34*1.04, capH*1.02, r*.34*1.04);
+      cap.position.set(x, h - capH/2 - .5 + .1, z); cap.rotation.y = mm.rotation.y;
+      g.add(mm, cap);
+    }
+  }
+}
+const segments = [];
+function makeSegment(i){
+  const g = new THREE.Group();
+  g.position.z = 40 - i*SEG;
+  g.add(mesh(GEO.ground, MAT.grass, 0, 0, 0));
+  g.add(mesh(GEO.road, MAT.road, 0, .02, 0));
+  for (const s of [-1, 1]) {
+    g.add(mesh(GEO.shoulder, MAT.shoulder, s*(ROAD_W/2 + .8), .015, 0));
+    g.add(mesh(GEO.edge, MAT.line, s*(ROAD_W/2 - .35), .04, 0));
+    for (let k = 0; k < 4; k++) g.add(mesh(GEO.post, MAT.post, s*(ROAD_W/2 + 1.9), .5, -30 + k*20));
+  }
+  for (const x of [-2, 2]) for (let k = 0; k < 8; k++) g.add(mesh(GEO.dash, MAT.line, x, .035, -SEG/2 + 5 + k*10));
+  fillScenery(g);
+  scene.add(g); segments.push(g);
+}
+for (let i = 0; i < NSEG; i++) makeSegment(i);
+
+/* ================= Mobil ================= */
+const CG = {
+  body: new THREE.BoxGeometry(1.9, .7, 4.1), roof: new THREE.BoxGeometry(1.65, .1, 2.0),
+  cab: new THREE.BoxGeometry(1.55, .55, 1.9), stripe: new THREE.BoxGeometry(.32, .02, 3.3),
+  wheel: new THREE.CylinderGeometry(.42, .42, .35, 14).rotateZ(Math.PI/2),
+  light: new THREE.BoxGeometry(.42, .22, .08), spoiler: new THREE.BoxGeometry(1.8, .08, .45),
+  spPost: new THREE.BoxGeometry(.1, .3, .1), shadow: new THREE.PlaneGeometry(2.7, 5.2).rotateX(-Math.PI/2)
+};
+const CM = {
+  glass: L(0xbfe9ff, {emissive:0x203a50}), tire: L(0x20232b), head: B(0xfff7c2), tail: B(0xff2f3f),
+  white: L(0xffffff), shadow: new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:.28, depthWrite:false}),
+  body: {}
+};
+function bodyMat(c){ return CM.body[c] || (CM.body[c] = L(c)); }
+function makeCar(color, isPlayer){
+  const root = new THREE.Group(), tilt = new THREE.Group(); root.add(tilt);
+  const bm = bodyMat(color);
+  tilt.add(mesh(CG.body, bm, 0, .75, 0));
+  tilt.add(mesh(CG.cab, CM.glass, 0, 1.3, .15));
+  tilt.add(mesh(CG.roof, bm, 0, 1.62, .15));
+  if (isPlayer) {
+    tilt.add(mesh(CG.stripe, CM.white, 0, 1.115, -.3));
+    tilt.add(mesh(CG.spoiler, bm, 0, 1.5, 1.85));
+    tilt.add(mesh(CG.spPost, bm, -.6, 1.3, 1.85), mesh(CG.spPost, bm, .6, 1.3, 1.85));
+  }
+  for (const x of [-.6, .6]) {
+    tilt.add(mesh(CG.light, CM.head, x, .82, -2.06));
+    tilt.add(mesh(CG.light, CM.tail, x, .82, 2.06));
+  }
+  const wheels = [];
+  for (const x of [-1, 1]) for (const z of [-1.35, 1.35]) {
+    const piv = new THREE.Group(); piv.position.set(x, .42, z);
+    piv.add(new THREE.Mesh(CG.wheel, CM.tire)); tilt.add(piv); wheels.push(piv);
+  }
+  root.add(mesh(CG.shadow, CM.shadow, 0, .06, 0));
+  return {root, tilt, wheels};
+}
+const player = makeCar(0xff7a00, true);
+scene.add(player.root);
+const ENEMY_COLORS = [0x2f7bff, 0xe53935, 0x8e44ff, 0x19c37d, 0xf2f2f2, 0xff4fa3, 0x00bcd4];
+
+/* Koin, partikel, garis kecepatan */
+const coinGeo = new THREE.CylinderGeometry(.7, .7, .14, 18).rotateX(Math.PI/2);
+const coinMat = L(0xffd21f, {emissive:0x8a6200});
+const parts = [];
+const pGeo = new THREE.BoxGeometry(.28, .28, .28);
+for (let i = 0; i < 80; i++) {
+  const m = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({color:0xffffff, transparent:true}));
+  m.visible = false; scene.add(m);
+  parts.push({m, v:new THREE.Vector3(), life:0, max:1});
+}
+function burst(x, y, z, colors, n, sp){
+  let c = 0;
+  for (const p of parts) {
+    if (p.life > 0) continue;
+    p.life = p.max = rnd(.5, 1.0); p.m.visible = true;
+    p.m.position.set(x + rnd(-.5,.5), y + rnd(0,.6), z + rnd(-.5,.5));
+    p.v.set(rnd(-1,1)*sp, rnd(.3,1)*sp, rnd(-1,1)*sp);
+    p.m.material.color.setHex(pick(colors)); p.m.material.opacity = 1;
+    if (++c >= n) break;
+  }
+}
+const streaks = [];
+const stGeo = new THREE.BoxGeometry(.05, .05, 8);
+for (let i = 0; i < 30; i++) {
+  const m = new THREE.Mesh(stGeo, new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0}));
+  const s = Math.random() < .5 ? -1 : 1;
+  m.position.set(s*rnd(7, 24), rnd(.4, 7), rnd(-170, 10));
+  scene.add(m); streaks.push(m);
+}
+
+/* ================= Audio (Web Audio) ================= */
+const A = {ctx:null, master:null, eng:null, noise:null};
+function initAudio(){
+  if (A.ctx) { if (A.ctx.state === 'suspended') A.ctx.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  const ctx = A.ctx = new AC();
+  A.master = ctx.createGain(); A.master.gain.value = settings.muted ? 0 : .7; A.master.connect(ctx.destination);
+  const o1 = ctx.createOscillator(), o2 = ctx.createOscillator();
+  o1.type = 'sawtooth'; o2.type = 'square';
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500; f.Q.value = 2;
+  const g = ctx.createGain(); g.gain.value = 0;
+  o1.connect(f); o2.connect(f); f.connect(g); g.connect(A.master);
+  const lfo = ctx.createOscillator(), lg = ctx.createGain();
+  lfo.frequency.value = 23; lg.gain.value = .02; lfo.connect(lg); lg.connect(g.gain);
+  o1.start(); o2.start(); lfo.start();
+  A.eng = {o1, o2, f, g};
+  const nb = ctx.createBuffer(1, ctx.sampleRate*.6, ctx.sampleRate), d = nb.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random()*2 - 1;
+  A.noise = nb;
+}
+function engineSound(speed, thr, active){
+  if (!A.eng) return;
+  const t = A.ctx.currentTime, e = A.eng, fr = 46 + speed*2.7 + thr*7;
+  e.o1.frequency.setTargetAtTime(fr, t, .05);
+  e.o2.frequency.setTargetAtTime(fr*.5, t, .05);
+  e.f.frequency.setTargetAtTime(360 + speed*19 + Math.max(0, thr)*260, t, .08);
+  e.g.gain.setTargetAtTime(active ? .10 + Math.min(.06, speed*.001) : 0, t, .1);
+}
+function tone(freq, dur, type, vol, delay, slideTo){
+  if (!A.ctx) return;
+  const ctx = A.ctx, t = ctx.currentTime + (delay || 0);
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(.001, t + dur);
+  o.connect(g); g.connect(A.master); o.start(t); o.stop(t + dur + .02);
+}
+function sndCrash(){
+  if (!A.ctx) return;
+  const ctx = A.ctx, t = ctx.currentTime;
+  const s = ctx.createBufferSource(); s.buffer = A.noise;
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass';
+  f.frequency.setValueAtTime(2400, t); f.frequency.exponentialRampToValueAtTime(90, t + .5);
+  const g = ctx.createGain(); g.gain.setValueAtTime(1, t); g.gain.exponentialRampToValueAtTime(.001, t + .55);
+  s.connect(f); f.connect(g); g.connect(A.master); s.start(t);
+  tone(130, .4, 'sine', .9, 0, 32);
+  tone(420, .12, 'square', .25, 0, 120);
+}
+const sndCoin = () => { tone(988, .09, 'square', .14, 0); tone(1319, .16, 'square', .14, .07); };
+const sndBeep = hi => tone(hi ? 880 : 440, hi ? .45 : .18, 'sine', .35, 0);
+const sndNear = () => tone(660, .12, 'triangle', .22, 0, 990);
+const sndOver = () => { tone(392, .3, 'triangle', .3, 0); tone(311, .3, 'triangle', .3, .28); tone(233, .6, 'triangle', .3, .56); };
+const sndWelcome = () => { [523,659,784,1047].forEach((f,i) => tone(f, .22, 'triangle', .3, i*.11)); tone(1047, .5, 'triangle', .3, .5); };
+function setMuted(m){
+  settings.muted = m; saveSettings();
+  if (A.master) A.master.gain.setTargetAtTime(m ? 0 : .7, A.ctx.currentTime, .03);
+  $('btnMute').textContent = m ? '🔇' : '🔊';
+}
+
+/* ================= micro:bit via Web Serial ================= */
+const mb = {connected:false, port:null, reader:null, buf:'', has:false, last:0, fx:0, fy:0, rawX:0, rawY:0, steer:0, throttle:0, fresh:false, calib:null, manual:false, since:0};
+const mbStatus = (txt, cls) => { const e = $('mbStatus'); e.textContent = txt; e.className = 'status ' + (cls || ''); };
+function mbOnLine(line){
+  const m = line.match(/-?\d+(?:\.\d+)?/g);
+  if (!m || m.length < 2) return;
+  const x = +m[0], y = +m[1];
+  if (!isFinite(x) || !isFinite(y)) return;
+  mb.rawX = x; mb.rawY = y;
+  if (!mb.has) { mb.fx = x; mb.fy = y; mb.has = true; } else { mb.fx += (x - mb.fx)*.35; mb.fy += (y - mb.fy)*.35; }
+  mb.last = performance.now();
+  if (mb.calib) { mb.calib.sx += mb.fx; mb.calib.sy += mb.fy; mb.calib.n++; }
+}
+async function mbOpen(port){
+  await port.open({baudRate:115200});
+  mb.port = port; mb.connected = true; mb.manual = false; mb.has = false; mb.buf = ''; mb.since = performance.now(); mb.last = 0;
+  mbStatus('Tersambung, menunggu data…', 'warn');
+  mbReadLoop(port);
+}
+async function mbConnect(){
+  if (mb.connected) { mb.manual = true; try { if (mb.reader) await mb.reader.cancel(); } catch(e){} return; }
+  if (!('serial' in navigator)) { mbStatus('Browser tidak mendukung Web Serial. Pakai Chrome/Edge/Brave.', 'bad'); return; }
+  try {
+    const port = await navigator.serial.requestPort({filters:[{usbVendorId:0x0d28}]});
+    await mbOpen(port);
+  } catch(e) {
+    if (e && e.name === 'NotFoundError') mbStatus('Tidak ada perangkat dipilih', ''); else mbStatus('Gagal terhubung: ' + (e.message || e.name), 'bad');
+  }
+}
+async function mbReadLoop(port){
+  const dec = new TextDecoder();
+  try {
+    const reader = port.readable.getReader(); mb.reader = reader;
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      mb.buf += dec.decode(value, {stream:true});
+      let i;
+      while ((i = mb.buf.indexOf('\n')) >= 0) { const line = mb.buf.slice(0, i); mb.buf = mb.buf.slice(i+1); mbOnLine(line); }
+      if (mb.buf.length > 300) mb.buf = '';
+    }
+  } catch(e) {}
+  try { if (mb.reader) mb.reader.releaseLock(); } catch(e){}
+  mb.reader = null;
+  if (mb.port === port) mbCleanup();
+}
+async function mbCleanup(){
+  const port = mb.port, manual = mb.manual;
+  mb.connected = false; mb.has = false; mb.fresh = false; mb.port = null; mb.calib = null;
+  try { if (port) await port.close(); } catch(e){}
+  mbStatus(manual ? 'Terputus' : 'micro:bit terputus', manual ? '' : 'bad');
+  $('btnConnect').textContent = '🔌 Sambungkan';
+  if (!manual && (G.state === 'playing' || G.state === 'countdown')) toast('micro:bit terputus, kontrol beralih ke keyboard ⌨️');
+}
+if ('serial' in navigator) {
+  navigator.serial.addEventListener('disconnect', e => { if (e.target === mb.port && mb.reader) { mb.manual = false; mb.reader.cancel().catch(() => {}); } });
+  navigator.serial.getPorts().then(ps => {
+    const p = ps.find(x => (x.getInfo().usbVendorId === 0x0d28));
+    if (p) mbOpen(p).catch(() => {});
+  }).catch(() => {});
+} else mbStatus('Web Serial tidak didukung (pakai keyboard)', 'warn');
+
+const dz = (v, d) => { const a = Math.abs(v); return a < d ? 0 : Math.sign(v)*(a - d)/(1 - d); };
+function mbDerive(now){
+  if (mb.calib && now > mb.calib.until) {
+    if (mb.calib.n > 5) { settings.offX = mb.calib.sx/mb.calib.n; settings.offY = mb.calib.sy/mb.calib.n; saveSettings(); mbStatus('Kalibrasi selesai ✔', 'ok'); }
+    else mbStatus('Kalibrasi gagal: belum ada data', 'bad');
+    mb.calib = null;
+  }
+  if (mb.connected && mb.has && now - mb.last > 3000) { mb.has = false; mbStatus('Tersambung, data berhenti', 'warn'); if (G.state === 'playing') toast('Data micro:bit berhenti, memakai keyboard ⌨️'); }
+  mb.fresh = mb.connected && mb.has && now - mb.last < 1500;
+  if (mb.fresh) {
+    if (!mb.calib && $('mbStatus').className.indexOf('warn') >= 0) mbStatus('micro:bit aktif ✔', 'ok');
+    const range = 450/settings.sens;
+    let nx = clamp((mb.fx - settings.offX)/range, -1, 1);
+    let thr = clamp(-(mb.fy - settings.offY)/range, -1, 1);
+    if (settings.invX) nx = -nx;
+    if (settings.invY) thr = -thr;
+    mb.steer = dz(nx, .05); mb.throttle = dz(thr, .06);
+  } else { mb.steer = 0; mb.throttle = 0; }
+  if (mb.connected) $('btnConnect').textContent = '⛔ Putuskan';
+}
+
+/* ================= Input keyboard ================= */
+const keys = {};
+window.addEventListener('keydown', e => {
+  const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const typing = e.target && e.target.tagName === 'INPUT';
+  if (!typing && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(k)) e.preventDefault();
+  keys[k] = true;
+  if (e.repeat) return;
+  if ($('welcome').classList.contains('show')) { if (k === 'Enter' && e.target.tagName !== 'BUTTON') { e.preventDefault(); $('btnWelcome').click(); } return; }
+  if ($('greet').classList.contains('show')) { if (k === 'Enter' || k === ' ' || k === 'Escape') { e.preventDefault(); endGreeting(); } return; }
+  if (k === 'p' || k === 'Escape') togglePause();
+  else if (k === 'r' && G.state !== 'menu') startRace();
+  else if (k === 'm') setMuted(!settings.muted);
+  else if ((k === 'Enter' || k === ' ') && G.state === 'menu' && !typing && e.target.tagName !== 'BUTTON') startRace();
+});
+window.addEventListener('keyup', e => { keys[e.key.length === 1 ? e.key.toLowerCase() : e.key] = false; });
+window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (G.state === 'playing') setPause(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && (G.state === 'playing' || G.state === 'countdown')) setPause(true); });
+
+/* ================= State game ================= */
+const G = {state:'menu', paused:false, speed:0, x:0, vx:0, thr:0, distance:0, time:0, bonus:0, coins:0, lives:5, inv:0, spawnT:0, shake:0, cdT:0, goT:0, overT:0, overShown:false, lastStep:-1, wheelA:0, engT:0};
+const enemies = [], coinList = [];
+const keySteer = () => ((keys.ArrowRight || keys.d) ? 1 : 0) - ((keys.ArrowLeft || keys.a) ? 1 : 0);
+const keyThr = () => ((keys.ArrowUp || keys.w) ? 1 : 0) - ((keys.ArrowDown || keys.s) ? 1 : 0);
+const heartsEl = $('hearts');
+for (let i = 0; i < 5; i++) { const s = document.createElement('span'); s.textContent = '❤️'; heartsEl.appendChild(s); }
+function renderHearts(lostIdx){
+  [...heartsEl.children].forEach((s, i) => {
+    s.classList.toggle('lost', i >= G.lives);
+    if (i === lostIdx) { s.classList.remove('pop'); void s.offsetWidth; s.classList.add('pop'); }
+  });
+}
+function updateRecordsUI(){
+  const txt = '⏱ ' + fmtTime(records.time) + ' &nbsp; 🛣 ' + fmtNum(records.dist) + ' m';
+  $('bestBox').innerHTML = '🏆 Rekor<br>' + txt;
+  $('menuRec').innerHTML = '⏱ Waktu terlama: ' + fmtTime(records.time) + '<br>🛣 Jarak terjauh: ' + fmtNum(records.dist) + ' m<br>⭐ Skor tertinggi: ' + fmtNum(records.score);
+}
+let toastTO;
+function toast(msg){ const t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTO); toastTO = setTimeout(() => t.classList.remove('show'), 3600); }
+function popup(txt, color){ const p = $('popup'); p.textContent = txt; p.style.color = color || ''; p.classList.remove('on'); void p.offsetWidth; p.classList.add('on'); }
+const score = () => Math.floor(G.distance/10) + G.bonus;
+
+function clearWorld(){
+  for (const e of enemies) scene.remove(e.car.root); enemies.length = 0;
+  for (const c of coinList) scene.remove(c.m); coinList.length = 0;
+}
+function show(id, on){ $(id).classList.toggle('show', on); }
+function startRace(){
+  initAudio();
+  clearWorld();
+  Object.assign(G, {state:'countdown', paused:false, speed:0, x:0, vx:0, thr:0, distance:0, time:0, bonus:0, coins:0, lives:5, inv:0, spawnT:1.4, shake:0, cdT:0, goT:0, overT:0, overShown:false, lastStep:-1});
+  renderHearts(-1);
+  show('menu', false); show('pauseOv', false); show('overOv', false);
+  $('hud').classList.add('show'); $('btnPause').textContent = '⏸';
+}
+function toMenu(){
+  clearWorld();
+  Object.assign(G, {state:'menu', paused:false, speed:14, vx:0, thr:0});
+  show('pauseOv', false); show('overOv', false); show('menu', true);
+  $('hud').classList.remove('show'); $('count').classList.remove('on');
+  updateRecordsUI();
+}
+function setPause(p){
+  if (G.state !== 'playing' && G.state !== 'countdown') return;
+  G.paused = p; show('pauseOv', p); $('btnPause').textContent = p ? '▶' : '⏸';
+}
+function togglePause(){ if (G.state === 'playing' || G.state === 'countdown') setPause(!G.paused); }
+function commitRecords(){
+  let nt = false, nd = false, ns = false;
+  const sc = score();
+  if (G.time > records.time) { records.time = G.time; nt = true; }
+  if (G.distance > records.dist) { records.dist = G.distance; nd = true; }
+  if (sc > records.score) { records.score = sc; ns = true; }
+  if (nt || nd || ns) saveRecords();
+  updateRecordsUI();
+  return {nt, nd, ns};
+}
+function gameOver(){
+  G.state = 'over'; G.overT = 0; G.overShown = false;
+  sndOver();
+}
+function showGameOver(){
+  const r = commitRecords();
+  $('oWho').textContent = 'Kerja bagus, ' + (settings.name || 'Pembalap') + '! 🎉';
+  $('oScore').textContent = fmtNum(score()); $('oDist').textContent = fmtNum(G.distance) + ' m';
+  $('oTime').textContent = fmtTime(G.time); $('oCoins').textContent = G.coins;
+  $('newRec').innerHTML = (r.nt ? '<span class="badge">🏆 Waktu rekor baru!</span>' : '') + (r.nd ? '<span class="badge">🛣 Jarak rekor baru!</span>' : '') + (r.ns ? '<span class="badge">⭐ Skor rekor baru!</span>' : '');
+  show('overOv', true);
+}
+window.addEventListener('beforeunload', () => { if (G.state === 'playing') commitRecords(); });
+
+/* ================= Spawn ================= */
+function spawnEnemy(lane, v){
+  const car = makeCar(pick(ENEMY_COLORS), false);
+  car.root.rotation.y = Math.PI;
+  const e = {car, x:LANES[lane] + rnd(-.35, .35), z:-320, v, near:false, prevZ:-320};
+  car.root.position.set(e.x, 0, e.z); scene.add(car.root); enemies.push(e);
+}
+function spawnCoins(lane){
+  const x = LANES[lane], n = 6;
+  for (let k = 0; k < n; k++) {
+    const m = new THREE.Mesh(coinGeo, coinMat);
+    const z = -310 - k*7; m.position.set(x, 1.1, z); scene.add(m);
+    coinList.push({m, x, z, prevZ:z});
+  }
+}
+function spawnWave(){
+  const lanes = [0,1,2].sort(() => Math.random() - .5);
+  const n = (G.time > 15 && Math.random() < Math.min(.45, .15 + G.time*.005)) ? 2 : 1;
+  const v = rnd(16, 25);
+  for (let i = 0; i < n; i++) spawnEnemy(lanes[i], v);
+  if (n === 1 && Math.random() < .4) spawnCoins(lanes[1 + (Math.random() < .5 ? 1 : 0)]);
+  else if (n === 2 && Math.random() < .3) spawnCoins(lanes[2]);
+}
+
+/* ================= Update ================= */
+const HALF_L = 2.05, HALF_W = .95;
+function step(dt){
+  const st = G.state;
+  const kS = keySteer(), kT = keyThr(), mbOn = mb.fresh;
+  const oldX = G.x;
+
+  // Kemudi
+  if (st !== 'over') {
+    if (kS !== 0) { G.vx = damp(G.vx, kS*11, 10, dt); G.x += G.vx*dt; }
+    else if (mbOn) { G.x = damp(G.x, mb.steer*XMAX, 10, dt); G.vx = (G.x - oldX)/dt; }
+    else { G.vx = damp(G.vx, 0, 12, dt); G.x += G.vx*dt; }
+  } else { G.vx = damp(G.vx, 0, 4, dt); G.x += G.vx*dt; }
+  if (G.x > XMAX) { G.x = XMAX; G.vx = Math.min(G.vx, 0); }
+  if (G.x < -XMAX) { G.x = -XMAX; G.vx = Math.max(G.vx, 0); }
+
+  // Gas / rem
+  const thrIn = kT !== 0 ? kT : (mbOn ? mb.throttle : 0);
+  G.thr = damp(G.thr, thrIn, 10, dt);
+
+  let engineSpeed = G.speed;
+  if (st === 'menu') { G.speed = 14; engineSpeed = 0; }
+  else if (st === 'countdown') {
+    G.speed = 0; G.cdT += dt;
+    const stepN = Math.min(3, Math.floor(G.cdT));
+    if (stepN !== G.lastStep) {
+      G.lastStep = stepN;
+      const t = $('countTxt'), c = $('count');
+      t.textContent = stepN < 3 ? String(3 - stepN) : 'GO!';
+      t.style.animation = 'none'; void t.offsetWidth; t.style.animation = '';
+      c.classList.add('on'); sndBeep(stepN === 3);
+      if (stepN === 3) { G.state = 'playing'; G.goT = .8; }
+    }
+    engineSpeed = 8 + G.cdT*6 + Math.sin(G.cdT*30);
+  }
+  if (G.goT > 0) { G.goT -= dt; if (G.goT <= 0) $('count').classList.remove('on'); }
+
+  if (G.state === 'playing') {
+    const maxS = 55 + Math.min(25, G.time*.3), cruise = 30, minS = 12;
+    const target = G.thr >= 0 ? lerp(cruise, maxS, G.thr) : lerp(cruise, minS, -G.thr);
+    const rate = target > G.speed ? 16 : 24;
+    G.speed += clamp(target - G.speed, -rate*dt, rate*dt);
+    G.time += dt; G.distance += G.speed*dt;
+    engineSpeed = G.speed;
+    G.spawnT -= dt;
+    if (G.spawnT <= 0) {
+      spawnWave();
+      const base = clamp(1.7 - G.time*.012, .85, 1.7);
+      G.spawnT = Math.max(.7, base*Math.sqrt(30/Math.max(18, G.speed)));
+    }
+  } else if (G.state === 'over') {
+    G.speed = damp(G.speed, 0, 2.2, dt); engineSpeed = G.speed;
+    G.overT += dt;
+    if (!G.overShown && G.overT > 1.1) { G.overShown = true; showGameOver(); }
+  }
+  if (G.inv > 0) G.inv -= dt;
+  G.shake = Math.max(0, G.shake - dt*1.8);
+
+  const wspeed = G.speed;
+  const dz = wspeed*dt;
+
+  // Dunia bergerak
+  for (const s of segments) { s.position.z += dz; if (s.position.z > 120) { s.position.z -= SEG*NSEG; fillScenery(s); } }
+  G.wheelA += dz/.42;
+
+  // Musuh
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+    e.prevZ = e.z; e.z += (wspeed + e.v)*dt;
+    e.car.root.position.z = e.z;
+    for (const w of e.car.wheels) w.rotation.x -= (wspeed + e.v)*dt/.42;
+    const live = (G.state === 'playing');
+    if (live && G.inv <= 0) {
+      const zMin = Math.min(e.prevZ, e.z), zMax = Math.max(e.prevZ, e.z);
+      if (Math.abs(e.x - G.x) < HALF_W*2*.9 && zMax > -HALF_L*2*.9 && zMin < HALF_L*2*.9) { crash(e); scene.remove(e.car.root); enemies.splice(i, 1); continue; }
+    }
+    if (live && !e.near && e.z > 2.5) {
+      e.near = true;
+      if (Math.abs(e.x - G.x) < 3.4 && G.inv <= 0) { G.bonus += 20; popup('LEWAT TIPIS! +20', '#7dffb5'); sndNear(); }
+    }
+    if (e.z > 30) { scene.remove(e.car.root); enemies.splice(i, 1); }
+  }
+
+  // Koin
+  for (let i = coinList.length - 1; i >= 0; i--) {
+    const c = coinList[i];
+    c.prevZ = c.z; c.z += dz; c.m.position.z = c.z; c.m.rotation.y += dt*5;
+    if (G.state === 'playing') {
+      const zMin = Math.min(c.prevZ, c.z), zMax = Math.max(c.prevZ, c.z);
+      if (Math.abs(c.x - G.x) < 1.7 && zMax > -2.6 && zMin < 2.6) {
+        G.bonus += 50; G.coins++; sndCoin(); popup('+50', '#ffd23f');
+        burst(c.x, 1.1, c.z, [0xffd21f, 0xfff3a0, 0xffffff], 8, 6);
+        scene.remove(c.m); coinList.splice(i, 1); continue;
+      }
+    }
+    if (c.z > 25) { scene.remove(c.m); coinList.splice(i, 1); }
+  }
+
+  // Partikel
+  for (const p of parts) {
+    if (p.life <= 0) continue;
+    p.life -= dt;
+    if (p.life <= 0) { p.m.visible = false; continue; }
+    p.v.y -= 18*dt; p.m.position.addScaledVector(p.v, dt); p.m.position.z += dz;
+    if (p.m.position.y < .15) { p.m.position.y = .15; p.v.y *= -.4; }
+    p.m.rotation.x += dt*8; p.m.rotation.y += dt*6; p.m.material.opacity = p.life/p.max;
+  }
+
+  // Garis kecepatan
+  const sOp = clamp((wspeed - 38)/30, 0, .5);
+  for (const m of streaks) {
+    m.position.z += wspeed*1.3*dt;
+    if (m.position.z > 20) { m.position.z = -170 - rnd(0, 20); m.position.x = (Math.random() < .5 ? -1 : 1)*rnd(7, 24); m.position.y = rnd(.4, 7); }
+    m.material.opacity = sOp;
+  }
+
+  // Awan
+  for (const c of clouds) {
+    c.position.x += c.userData.v*dt; c.position.z += wspeed*.08*dt;
+    if (c.position.x > 300) c.position.x = -300; else if (c.position.x < -300) c.position.x = 300;
+    if (c.position.z > 40) { c.position.z = -450; c.position.x = rnd(-260, 260); }
+  }
+
+  // Mobil pemain
+  const pr = player.root;
+  pr.position.x = G.x;
+  pr.rotation.y = -clamp(G.vx*.025, -.3, .3);
+  player.tilt.rotation.z = -clamp(G.vx*.022, -.25, .25);
+  for (const w of player.wheels) w.rotation.x -= dz/.42;
+  player.tilt.visible = G.inv > 0 && G.state === 'playing' ? (Math.floor(performance.now()/90) % 2 === 0) : true;
+
+  // Suara mesin
+  const engActive = (G.state === 'playing' || G.state === 'countdown' || G.state === 'over') && !G.paused;
+  engineSound(engineSpeed, G.thr, engActive);
+}
+
+function crash(e){
+  G.lives--; G.inv = 1.8; G.shake = 1;
+  G.speed = Math.max(12, G.speed*.55);
+  sndCrash();
+  burst(G.x, 1, -1, [e.car.tilt.children[0].material.color.getHex(), 0xff7a00, 0xffd23f, 0xffffff], 28, 9);
+  const f = $('flash'); f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+  const app = $('app'); app.classList.remove('shake'); void app.offsetWidth; app.classList.add('shake');
+  renderHearts(G.lives);
+  popup('BRAAK! 💥', '#ff6b78');
+  if (G.lives <= 0) gameOver();
+}
+
+function render(dt){
+  // Kamera
+  const sp = G.speed;
+  camera.fov = 62 + clamp(sp - 30, 0, 45)*.25 + (G.state === 'countdown' ? 0 : 0);
+  camera.updateProjectionMatrix();
+  camera.position.x = damp(camera.position.x, G.x*.6, 6, dt);
+  const shk = G.shake*G.shake;
+  camera.position.y = 4.6 + (Math.random() - .5)*.5*shk;
+  camera.position.z = 10.5;
+  camera.lookAt(G.x*.35 + (Math.random() - .5)*.6*shk, 1.4 + (Math.random() - .5)*.4*shk, -14);
+  camera.rotateZ(-clamp(G.vx*.004, -.05, .05) + (Math.random() - .5)*.05*shk);
+  sky.position.copy(camera.position);
+  renderer.render(scene, camera);
+
+  // HUD
+  if (G.state !== 'menu') {
+    $('hScore').textContent = fmtNum(score());
+    $('hDist').textContent = fmtNum(G.distance) + ' m';
+    $('hTime').textContent = fmtTime(G.time);
+    $('hSpeed').textContent = Math.round(G.speed*3);
+    $('chip').textContent = mb.fresh ? '🎮 micro:bit' : '⌨️ Keyboard';
+  }
+}
+
+/* Indikator tilt live (menu) */
+function updateMeters(){
+  if (!$('menu').classList.contains('show')) return;
+  const kS = keySteer(), kT = keyThr();
+  const s = mb.fresh && kS === 0 ? mb.steer : kS;
+  const t = mb.fresh && kT === 0 ? mb.throttle : kT;
+  $('kSteer').style.left = (50 + s*50) + '%'; $('kThr').style.left = (50 + t*50) + '%';
+  $('vSteer').textContent = Math.round(s*100) + '%'; $('vThr').textContent = Math.round(t*100) + '%';
+  $('raw').textContent = mb.fresh ? ('micro:bit  X: ' + Math.round(mb.rawX) + ' mg   Y: ' + Math.round(mb.rawY) + ' mg') : 'Sumber: keyboard (micro:bit belum aktif)';
+}
+
+let lastT = performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  const dt = Math.min(.05, (now - lastT)/1000 || .016); lastT = now;
+  mbDerive(now);
+  updateMeters();
+  if (!G.paused) step(dt);
+  render(dt);
+}
+
+/* ================= Tombol UI ================= */
+/* ================= Avatar & sapaan ================= */
+const AVATARS = [
+  {n:'Oranye', helmet:'#ff7a00', skin:'#ffd7b0'}, {n:'Biru', helmet:'#2f7bff', skin:'#c68642'},
+  {n:'Hijau', helmet:'#19c37d', skin:'#f1c27d'}, {n:'Pink', helmet:'#ff4fa3', skin:'#8d5524'}
+];
+function avatarSVG(i){
+  const a = AVATARS[i] || AVATARS[0];
+  return '<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+    '<circle cx="60" cy="62" r="46" fill="' + a.helmet + '" stroke="#16294d" stroke-width="4"/>' +
+    '<path d="M60 17 V44" stroke="#fff" stroke-width="9" stroke-linecap="round"/>' +
+    '<rect x="24" y="48" width="72" height="50" rx="25" fill="' + a.skin + '" stroke="#16294d" stroke-width="4"/>' +
+    '<circle cx="45" cy="69" r="6" fill="#16294d"/><circle cx="75" cy="69" r="6" fill="#16294d"/>' +
+    '<circle cx="47" cy="67" r="2" fill="#fff"/><circle cx="77" cy="67" r="2" fill="#fff"/>' +
+    '<circle cx="35" cy="82" r="5" fill="#ff8aa0" opacity=".6"/><circle cx="85" cy="82" r="5" fill="#ff8aa0" opacity=".6"/>' +
+    '<ellipse class="mouth" cx="60" cy="85" rx="10" ry="5" fill="#7a1f2b" stroke="#16294d" stroke-width="3"/></svg>';
+}
+const avBox = $('avPick');
+AVATARS.forEach((a, i) => {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'avopt'; b.title = a.n; b.innerHTML = avatarSVG(i);
+  b.onclick = () => { settings.avatar = i; saveSettings(); markAv(); };
+  avBox.appendChild(b);
+});
+function markAv(){ [...avBox.children].forEach((b, i) => b.classList.toggle('sel', i === settings.avatar)); }
+function renderWho(){
+  const nm = settings.name || 'Pembalap';
+  const w = $('who'); w.innerHTML = '';
+  const d = document.createElement('span'); d.className = 'mini'; d.innerHTML = avatarSVG(settings.avatar);
+  const t = document.createElement('b'); t.textContent = nm; w.append(d, t);
+  const m = $('menuWho'); m.innerHTML = '';
+  const d2 = d.cloneNode(true), t2 = document.createElement('span'); t2.textContent = 'Pemain: ' + nm;
+  const bt = document.createElement('button'); bt.className = 'btn alt small'; bt.textContent = '✏️ Ganti';
+  bt.onclick = () => { show('menu', false); show('welcome', true); $('nameIn').focus(); };
+  m.append(d2, t2, bt);
+}
+let greetToken = 0, greetTw = null;
+function speak(text, onend){
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'id-ID'; u.rate = .95; u.pitch = 1.25;
+  const v = (speechSynthesis.getVoices() || []).find(x => /^id/i.test(x.lang)); if (v) u.voice = v;
+  u.onend = onend; u.onerror = onend;
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+function say(text, cb, token){
+  const bub = $('bubbleTxt'), av = $('greetAv');
+  bub.textContent = ''; av.classList.add('talk'); clearInterval(greetTw);
+  let i = 0;
+  greetTw = setInterval(() => { bub.textContent = text.slice(0, ++i); if (i >= text.length) clearInterval(greetTw); }, 30);
+  let done = false;
+  const finish = () => {
+    if (done || token !== greetToken) return;
+    done = true; clearInterval(greetTw); bub.textContent = text; av.classList.remove('talk');
+    setTimeout(() => { if (token === greetToken) cb(); }, 600);
+  };
+  const sp = ('speechSynthesis' in window) && !settings.muted;
+  if (sp) speak(text, finish);
+  setTimeout(finish, sp ? text.length*220 + 3000 : Math.max(2200, text.length*75 + 700));
+}
+function runGreeting(name){
+  const token = ++greetToken;
+  const lines = ['Selamat datang di Car Avoidance Challenge!', 'Halo, ' + name + '! Senang bertemu denganmu.', 'Mari bermain dengan hebat!'];
+  show('welcome', false); show('greet', true);
+  $('greetAv').innerHTML = avatarSVG(settings.avatar);
+  $('bubbleTxt').textContent = '';
+  const next = i => {
+    if (token !== greetToken) return;
+    if (i >= lines.length) { endGreeting(); return; }
+    say(lines[i], () => next(i + 1), token);
+  };
+  setTimeout(() => next(0), 800);
+}
+function endGreeting(){
+  greetToken++; clearInterval(greetTw);
+  try { speechSynthesis.cancel(); } catch(e){}
+  show('greet', false); show('menu', true); renderWho();
+}
+$('btnWelcome').onclick = () => {
+  const inp = $('nameIn'), nm = inp.value.trim().replace(/\s+/g, ' ').slice(0, 16);
+  if (!nm) { inp.classList.remove('err'); void inp.offsetWidth; inp.classList.add('err'); inp.focus(); return; }
+  settings.name = nm; saveSettings(); initAudio(); sndWelcome(); runGreeting(nm);
+};
+$('skipGreet').onclick = endGreeting;
+$('nameIn').value = settings.name || '';
+markAv(); renderWho();
+
+$('btnConnect').onclick = mbConnect;
+$('btnCal').onclick = () => {
+  if (!mb.fresh) { mbStatus('Sambungkan micro:bit dulu', 'warn'); return; }
+  mb.calib = {sx:0, sy:0, n:0, until:performance.now() + 900};
+  mbStatus('Kalibrasi… tahan micro:bit tetap datar', 'warn');
+};
+$('btnCalReset').onclick = () => { settings.offX = 0; settings.offY = 0; saveSettings(); mbStatus('Kalibrasi direset', ''); };
+$('sens').value = settings.sens; $('sensV').textContent = settings.sens.toFixed(1) + '×';
+$('sens').oninput = e => { settings.sens = +e.target.value; $('sensV').textContent = settings.sens.toFixed(1) + '×'; saveSettings(); };
+$('invX').checked = settings.invX; $('invY').checked = settings.invY;
+$('invX').onchange = e => { settings.invX = e.target.checked; saveSettings(); };
+$('invY').onchange = e => { settings.invY = e.target.checked; saveSettings(); };
+$('btnStart').onclick = startRace;
+$('btnPause').onclick = togglePause;
+$('btnRestart').onclick = startRace;
+$('btnMute').onclick = () => setMuted(!settings.muted);
+$('pResume').onclick = () => setPause(false);
+$('pRestart').onclick = startRace;
+$('pMenu').onclick = toMenu;
+$('oRestart').onclick = startRace;
+$('oMenu').onclick = toMenu;
+
+setMuted(settings.muted);
+updateRecordsUI();
+renderHearts(-1);
+G.speed = 14;
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
